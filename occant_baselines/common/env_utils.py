@@ -37,6 +37,7 @@ def construct_envs(
     num_processes = config.NUM_PROCESSES
     configs = []
     env_classes = [env_class for _ in range(num_processes)]
+    ranks = list(range(num_processes))
     dataset = make_dataset(config.TASK_CONFIG.DATASET.TYPE)
     scenes = config.TASK_CONFIG.DATASET.CONTENT_SCENES
     if "*" in config.TASK_CONFIG.DATASET.CONTENT_SCENES:
@@ -83,7 +84,7 @@ def construct_envs(
 
     envs = habitat.VectorEnv(
         make_env_fn=make_env_fn,
-        env_fn_args=tuple(tuple(zip(configs, env_classes))),
-        workers_ignore_signals=workers_ignore_signals,
+        env_fn_args=tuple(tuple(zip(configs, env_classes, ranks))),
+        # workers_ignore_signals=workers_ignore_signals,
     )
     return envs

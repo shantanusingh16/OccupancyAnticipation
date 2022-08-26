@@ -1,0 +1,39 @@
+BASE_TASK_CONFIG_PATH: "configs/navigation/gibson_evaluate_noise_free_1000.yaml"
+TRAINER_NAME: "occant_nav"
+ENV_NAME: "NavRLEnv"
+SIMULATOR_GPU_ID: 0
+SIMULATOR_GPU_IDS: [0]
+TORCH_GPU_ID: 0
+TENSORBOARD_DIR: "trained_models/occant_rgb/run_00/navigation_eval_noise_free_tb"
+TEST_EPISODE_COUNT: 998
+EVAL_CKPT_PATH_DIR: "trained_models/occant_rgb/run_00/checkpoints/ckpt.8.pth"
+NUM_PROCESSES: 1
+SENSORS: ["RGB_SENSOR", "DEPTH_SENSOR"]
+CHECKPOINT_FOLDER: "trained_models/occant_rgb/run_00/checkpoints"
+T_MAX: 1000
+
+EVAL:
+  SPLIT: "val"
+  USE_CKPT_CONFIG: False
+
+RL:
+  ANS:
+    goal_success_radius: 0.2 # 2 x agent radius
+    planning_step: 1.25
+    image_scale_hw: [128, 128]
+    crop_map_for_planning: False
+    MAPPER:
+      map_size: 101
+      registration_type: 'entropy_moving_average'
+      thresh_entropy: 0.5
+      ignore_pose_estimator: True
+      pose_predictor_inputs: ['ego_map']
+      use_data_parallel: False
+      gpu_ids: [0]
+    OCCUPANCY_ANTICIPATOR:
+      type: 'occant_rgb'
+      GP_ANTICIPATION:
+        resnet_type: 'resnet18'
+        unet_nsf: 16
+    LOCAL_POLICY:
+      use_heuristic_policy: False

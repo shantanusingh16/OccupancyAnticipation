@@ -296,17 +296,17 @@ class OccAntNavTrainer(BaseRLTrainer):
         self.local_actor_critic.eval()
 
         number_of_eval_episodes = self.config.TEST_EPISODE_COUNT
-        if number_of_eval_episodes == -1:
-            number_of_eval_episodes = sum(self.envs.number_of_episodes)
-        else:
-            total_num_eps = sum(self.envs.number_of_episodes)
-            if total_num_eps < number_of_eval_episodes:
-                logger.warn(
-                    f"Config specified {number_of_eval_episodes} eval episodes"
-                    ", dataset only has {total_num_eps}."
-                )
-                logger.warn(f"Evaluating with {total_num_eps} instead.")
-                number_of_eval_episodes = total_num_eps
+        # if number_of_eval_episodes == -1:
+        #     number_of_eval_episodes = sum(self.envs.number_of_episodes)
+        # else:
+        #     total_num_eps = sum(self.envs.number_of_episodes)
+        #     if total_num_eps < number_of_eval_episodes:
+        #         logger.warn(
+        #             f"Config specified {number_of_eval_episodes} eval episodes"
+        #             ", dataset only has {total_num_eps}."
+        #         )
+        #         logger.warn(f"Evaluating with {total_num_eps} instead.")
+        #         number_of_eval_episodes = total_num_eps
 
         M = ans_cfg.overall_map_size
         V = ans_cfg.MAPPER.map_size
