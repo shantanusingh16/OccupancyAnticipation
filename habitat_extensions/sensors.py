@@ -333,12 +333,12 @@ class GTEgoMap(Sensor):
             self.max_forward_range = self.map_size * self.map_scale
 
         # Agent height for pointcloud tranforms
-        self.camera_height = self._sim.habitat_config.DEPTH_SENSOR.POSITION[1]
+        self.camera_height = self._sim.config.DEPTH_SENSOR.POSITION[1]
 
         # Compute intrinsic matrix
-        depth_H = self._sim.habitat_config.DEPTH_SENSOR.HEIGHT
-        depth_W = self._sim.habitat_config.DEPTH_SENSOR.WIDTH
-        hfov = float(self._sim.habitat_config.DEPTH_SENSOR.HFOV) * np.pi / 180
+        depth_H = self._sim.config.DEPTH_SENSOR.HEIGHT
+        depth_W = self._sim.config.DEPTH_SENSOR.WIDTH
+        hfov = float(self._sim.config.DEPTH_SENSOR.HFOV) * np.pi / 180
         vfov = 2 * np.arctan((depth_H / depth_W) * np.tan(hfov / 2.0))
         self.intrinsic_matrix = np.array(
             [
@@ -354,12 +354,12 @@ class GTEgoMap(Sensor):
         self.height_thresh = self.config.HEIGHT_THRESH
 
         # Depth processing
-        self.min_depth = float(self._sim.habitat_config.DEPTH_SENSOR.MIN_DEPTH)
-        self.max_depth = float(self._sim.habitat_config.DEPTH_SENSOR.MAX_DEPTH)
+        self.min_depth = float(self._sim.config.DEPTH_SENSOR.MIN_DEPTH)
+        self.max_depth = float(self._sim.config.DEPTH_SENSOR.MAX_DEPTH)
 
         # Pre-compute a grid of locations for depth projection
-        W = self._sim.habitat_config.DEPTH_SENSOR.WIDTH
-        H = self._sim.habitat_config.DEPTH_SENSOR.HEIGHT
+        W = self._sim.config.DEPTH_SENSOR.WIDTH
+        H = self._sim.config.DEPTH_SENSOR.HEIGHT
         self.proj_xs, self.proj_ys = np.meshgrid(
             np.linspace(-1, 1, W), np.linspace(1, -1, H)
         )
@@ -427,7 +427,7 @@ class GTEgoMap(Sensor):
         Project pixels visible in depth-map to ground-plane
         """
 
-        if self._sim.habitat_config.DEPTH_SENSOR.NORMALIZE_DEPTH:
+        if self._sim.config.DEPTH_SENSOR.NORMALIZE_DEPTH:
             depth = sim_depth * (self.max_depth - self.min_depth) + self.min_depth
         else:
             depth = sim_depth
@@ -516,12 +516,12 @@ class GTEgoWallMap(Sensor):
             self.max_forward_range = self.map_size * self.map_scale
 
         # Agent height for pointcloud tranforms
-        self.camera_height = self._sim.habitat_config.DEPTH_SENSOR.POSITION[1]
+        self.camera_height = self._sim.config.DEPTH_SENSOR.POSITION[1]
 
         # Compute intrinsic matrix
-        depth_H = self._sim.habitat_config.DEPTH_SENSOR.HEIGHT
-        depth_W = self._sim.habitat_config.DEPTH_SENSOR.WIDTH
-        hfov = float(self._sim.habitat_config.DEPTH_SENSOR.HFOV) * np.pi / 180
+        depth_H = self._sim.config.DEPTH_SENSOR.HEIGHT
+        depth_W = self._sim.config.DEPTH_SENSOR.WIDTH
+        hfov = float(self._sim.config.DEPTH_SENSOR.HFOV) * np.pi / 180
         vfov = 2 * np.arctan((depth_H / depth_W) * np.tan(hfov / 2.0))
         self.intrinsic_matrix = np.array(
             [
@@ -537,12 +537,12 @@ class GTEgoWallMap(Sensor):
         self.height_thresh = self.config.HEIGHT_THRESH
 
         # Depth processing
-        self.min_depth = float(self._sim.habitat_config.DEPTH_SENSOR.MIN_DEPTH)
-        self.max_depth = float(self._sim.habitat_config.DEPTH_SENSOR.MAX_DEPTH)
+        self.min_depth = float(self._sim.config.DEPTH_SENSOR.MIN_DEPTH)
+        self.max_depth = float(self._sim.config.DEPTH_SENSOR.MAX_DEPTH)
 
         # Pre-compute a grid of locations for depth projection
-        W = self._sim.habitat_config.DEPTH_SENSOR.WIDTH
-        H = self._sim.habitat_config.DEPTH_SENSOR.HEIGHT
+        W = self._sim.config.DEPTH_SENSOR.WIDTH
+        H = self._sim.config.DEPTH_SENSOR.HEIGHT
         self.proj_xs, self.proj_ys = np.meshgrid(
             np.linspace(-1, 1, W), np.linspace(1, -1, H)
         )
@@ -608,7 +608,7 @@ class GTEgoWallMap(Sensor):
         Project pixels visible in depth-map to ground-plane
         """
 
-        if self._sim.habitat_config.DEPTH_SENSOR.NORMALIZE_DEPTH:
+        if self._sim.config.DEPTH_SENSOR.NORMALIZE_DEPTH:
             depth = sim_depth * (self.max_depth - self.min_depth) + self.min_depth
         else:
             depth = sim_depth

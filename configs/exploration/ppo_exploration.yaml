@@ -1,0 +1,48 @@
+BASE_TASK_CONFIG_PATH: "configs/exploration/gibson_evaluate_noise_free.yaml"
+TRAINER_NAME: "occant_exp"
+ENV_NAME: "ExpRLEnv"
+SIMULATOR_GPU_ID: 1
+SIMULATOR_GPU_IDS: [1, 2, 3, 4, 5, 6, 7]
+TORCH_GPU_ID: 0
+VIDEO_OPTION: ["disk", "tensorboard"]
+TENSORBOARD_DIR: "trained_models/occant_rgb/run_00/tb"
+VIDEO_DIR: "trained_models/occant_rgb/run_00/video_dir"
+TEST_EPISODE_COUNT: 2
+EVAL_CKPT_PATH_DIR: "trained_models/occant_rgb/run_00/checkpoints"
+NUM_PROCESSES: 8
+SENSORS: ["RGB_SENSOR", "DEPTH_SENSOR"]
+CHECKPOINT_FOLDER: "trained_models/occant_rgb/run_00/checkpoints"
+NUM_EPISODES: 10000
+T_EXP: 1000
+
+RL:
+  PPO:
+    # ppo params
+    ppo_epoch: 4
+    num_mini_batch: 4
+  ANS:
+    reward_type: 'area_seen'
+    image_scale_hw: [128, 128]
+    MAPPER:
+      map_size: 65
+      num_mapper_steps: 100
+      registration_type: 'moving_average'
+      label_id: 'ego_map_gt_anticipated'
+      ignore_pose_estimator: False
+      pose_predictor_inputs: ['ego_map']
+      num_update_batches: 50
+      map_batch_size: 420
+      use_data_parallel: True
+      replay_size: 100000
+      gpu_ids: [1, 2, 3, 4, 5, 6, 7]
+    OCCUPANCY_ANTICIPATOR:
+      type: 'occant_rgb'
+      GP_ANTICIPATION:
+        wall_fov: 120.0
+        resnet_type: 'resnet18'
+        unet_nsf: 16
+        detach_depth_proj: False
+        pretrained_depth_proj_model: "trained_models/ans_rgb/run_00/checkpoints/ckpt.12.pth"
+        freeze_depth_proj_model: False
+    LOCAL_POLICY:
+      learning_algorithm: 'rl'
