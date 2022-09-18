@@ -1,12 +1,13 @@
-[submodule "environments/habitat/habitat-api"]
-	path = environments/habitat/habitat-api
-	url = git@github.com:facebookresearch/habitat-lab.git
+[submodule "environments/habitat/habitat-lab"]
+	path = environments/habitat/habitat-lab
+	url = https://github.com/shantanusingh16/habitat-lab.git
+	branch = challenge-2020
 [submodule "occant_utils/astar_pycpp"]
 	path = occant_utils/astar_pycpp
-	url = git@github.com:srama2512/astar_pycpp.git
+	url = https://github.com/srama2512/astar_pycpp.git
 [submodule "environments/habitat/habitat-sim"]
 	path = environments/habitat/habitat-sim
-	url = git@github.com:facebookresearch/habitat-sim.git
+	url = https://github.com/shantanusingh16/habitat-sim.git
 [submodule "cross-view"]
 	path = cross-view
 	url = https://github.com/shantanusingh16/cross-view.git
