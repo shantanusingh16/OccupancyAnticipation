@@ -35,6 +35,7 @@ from occant_utils.common import (
     crop_map,
 )
 from einops import rearrange, reduce, asnumpy
+from itertools import chain
 
 
 class ActiveNeuralSLAMExplorer:
@@ -288,7 +289,7 @@ class ActiveNeuralSLAMExplorer:
                 rand_y = float(rand_y.item())
         return (rand_x, rand_y)
 
-    def _has_reached_goal(agent_position, goal_position):
+    def _has_reached_goal(self, agent_position, goal_position):
         if agent_position is None or goal_position is None:
             return False
         if np.linalg.norm(agent_position - goal_position) < self.goal_success_radius:
@@ -384,10 +385,12 @@ class ActiveNeuralSLAMExplorer:
         self, observations, prev_observations, prev_state_estimates
     ):
         rgb_at_t_1 = prev_observations["rgb"]  # (bs, H, W, C)
+        rgb_large_at_t_1 = prev_observations["rgb_large"] # (bs, H, W, C)
         depth_at_t_1 = prev_observations["depth"]  # (bs, H, W, 1)
         ego_map_gt_at_t_1 = prev_observations["ego_map_gt"]  # (bs, Hby2, Wby2, 2)
         pose_at_t_1 = prev_observations["pose"]  # (bs, 3)
         rgb_at_t = observations["rgb"]  # (bs, H, W, C)
+        rgb_large_at_t = observations["rgb_large"] # (bs, H, W, C)
         depth_at_t = observations["depth"]  # (bs, H, W, 1)
         ego_map_gt_at_t = observations["ego_map_gt"]  # (bs, Hby2, Wby2, 2)
         pose_at_t = observations["pose"]  # (bs, 3)
@@ -403,6 +406,7 @@ class ActiveNeuralSLAMExplorer:
 
         mapper_inputs = {
             "rgb_at_t_1": rgb_at_t_1,
+            "rgb_large_at_t_1": rgb_large_at_t_1,
             "depth_at_t_1": depth_at_t_1,
             "ego_map_gt_at_t_1": ego_map_gt_at_t_1,
             "ego_map_gt_anticipated_at_t_1": ego_map_gt_anticipated_at_t_1,
@@ -410,6 +414,7 @@ class ActiveNeuralSLAMExplorer:
             "pose_hat_at_t_1": pose_hat_at_t_1,
             "map_at_t_1": map_at_t_1,
             "rgb_at_t": rgb_at_t,
+            "rgb_large_at_t": rgb_large_at_t,
             "depth_at_t": depth_at_t,
             "ego_map_gt_at_t": ego_map_gt_at_t,
             "ego_map_gt_anticipated_at_t": ego_map_gt_anticipated_at_t,
@@ -772,10 +777,12 @@ class ActiveNeuralSLAMNavigator:
         self, observations, prev_observations, prev_state_estimates
     ):
         rgb_at_t_1 = prev_observations["rgb"]  # (bs, H, W, C)
+        rgb_large_at_t_1 = prev_observations["rgb_large"]  # (bs, H, W, C)
         depth_at_t_1 = prev_observations["depth"]  # (bs, H, W, 1)
         ego_map_gt_at_t_1 = prev_observations["ego_map_gt"]  # (bs, Hby2, Wby2, 2)
         pose_at_t_1 = prev_observations["pose"]  # (bs, 3)
         rgb_at_t = observations["rgb"]  # (bs, H, W, C)
+        rgb_large_at_t = observations["rgb_large"]  # (bs, H, W, C)
         depth_at_t = observations["depth"]  # (bs, H, W, 1)
         ego_map_gt_at_t = observations["ego_map_gt"]  # (bs, Hby2, Wby2, 2)
         pose_at_t = observations["pose"]  # (bs, 3)
@@ -791,6 +798,7 @@ class ActiveNeuralSLAMNavigator:
 
         mapper_inputs = {
             "rgb_at_t_1": rgb_at_t_1,
+            "rgb_large_at_t_1": rgb_large_at_t_1,
             "depth_at_t_1": depth_at_t_1,
             "ego_map_gt_at_t_1": ego_map_gt_at_t_1,
             "ego_map_gt_anticipated_at_t_1": ego_map_gt_anticipated_at_t_1,
@@ -798,6 +806,7 @@ class ActiveNeuralSLAMNavigator:
             "pose_hat_at_t_1": pose_hat_at_t_1,
             "map_at_t_1": map_at_t_1,
             "rgb_at_t": rgb_at_t,
+            "rgb_large_at_t": rgb_large_at_t,
             "depth_at_t": depth_at_t,
             "ego_map_gt_at_t": ego_map_gt_at_t,
             "ego_map_gt_anticipated_at_t": ego_map_gt_anticipated_at_t,

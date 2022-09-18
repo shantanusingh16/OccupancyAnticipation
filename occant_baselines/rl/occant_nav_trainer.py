@@ -9,6 +9,7 @@ import cv2
 import time
 import copy
 import random
+import pickle
 
 from collections import defaultdict, deque
 from typing import Any, Dict, List, Optional
@@ -212,6 +213,9 @@ class OccAntNavTrainer(BaseRLTrainer):
             rgb = rearrange(batch["rgb"], "b h w c -> b c h w")
             rgb = F.interpolate(rgb, (imH, imW), mode="bilinear")
             batch["rgb"] = rearrange(rgb, "b c h w -> b h w c")
+        if "rgb_large" in batch:
+            rgb = rearrange(batch["rgb_large"], "b h w c -> b c h w")
+            batch["rgb_large"] = rearrange(rgb, "b c h w -> b h w c")
         if batch["depth"].size(1) != imH or batch["depth"].size(2) != imW:
             depth = rearrange(batch["depth"], "b h w c -> b c h w")
             depth = F.interpolate(depth, (imH, imW), mode="nearest")
@@ -233,6 +237,32 @@ class OccAntNavTrainer(BaseRLTrainer):
                 batch["pose"] = add_pose(self.prev_batch["pose"], actions_delta)
 
         return batch
+
+    def write_frame_to_log(self, log_dir, ep_step, batch, mapper_outputs):
+        rgb = batch['rgb_large'].detach().cpu().numpy().astype(np.uint8).squeeze()
+        cv2.imwrite(f'{log_dir}/rgb/{ep_step}.png', rgb)
+
+        depth = (batch['depth'].detach().cpu().numpy().squeeze() * 65535).astype(np.uint16)
+        cv2.imwrite(f'{log_dir}/depth/{ep_step}.png', depth)
+
+        pose = batch['pose'].detach().cpu().numpy().squeeze()
+        np.save(f'{log_dir}/pose/{ep_step}.npy', pose)
+
+        bev = mapper_outputs['all_pu_outputs']['occ_estimate'].detach().cpu().numpy().squeeze()
+        bev_3cls = np.zeros(bev.shape[1:], dtype=np.uint8)
+        bev_3cls[(bev[0] > self.config.RL.ANS.thresh_obstacle) \
+            & (bev[1] > self.config.RL.ANS.thresh_explored)] = 127
+        bev_3cls[(bev[0] < self.config.RL.ANS.thresh_obstacle) \
+            & (bev[1] > self.config.RL.ANS.thresh_explored)] = 255
+        cv2.imwrite(f'{log_dir}/bev/{ep_step}.png', bev_3cls)
+
+        global_map = mapper_outputs['mt'].detach().cpu().numpy().squeeze()
+        gm_3cls = np.zeros(global_map.shape[1:], dtype=np.uint8)
+        gm_3cls[(global_map[0] > self.config.RL.ANS.thresh_obstacle) \
+            & (global_map[1] > self.config.RL.ANS.thresh_explored)] = 127
+        gm_3cls[(global_map[0] < self.config.RL.ANS.thresh_obstacle) \
+            & (global_map[1] > self.config.RL.ANS.thresh_explored)] = 255
+        cv2.imwrite(f'{log_dir}/global_map/{ep_step}.png', gm_3cls)
 
     def train(self) -> None:
         r"""Main method for training PPO.
@@ -286,9 +316,27 @@ class OccAntNavTrainer(BaseRLTrainer):
             k.replace("actor_critic.", ""): v
             for k, v in ckpt_dict["local_state_dict"].items()
         }
+        if self.config.OA_CKPT_PATH_DIR is not None:
+            om_ckpt_dict = self.load_checkpoint(self.config.OA_CKPT_PATH_DIR, map_location="cpu")
+            # self.mapper.projection_unit.main.load_state_dict(om_ckpt_dict)
+            om_ckpt_dict = {
+                f"projection_unit.main.{k}" : v
+                for k, v in om_ckpt_dict.items()
+            }
+            mapper_dict.update(om_ckpt_dict)
+
+        if self.config.CROSSVIEW_CKPT_PATH_DIR is not None:
+            om_ckpt_dict = self.load_checkpoint(self.config.CROSSVIEW_CKPT_PATH_DIR, map_location="cpu")
+            # self.mapper.projection_unit.main.load_state_dict(om_ckpt_dict)
+            om_ckpt_dict = {
+                f"projection_unit.main.main.main.{k}" : v
+                for k, v in om_ckpt_dict.items()
+            }
+            mapper_dict.update(om_ckpt_dict)
+
         # Strict = False is set to ignore to handle the case where
         # pose_estimator is not required.
-        self.mapper.load_state_dict(mapper_dict, strict=False)
+        mk, uk = self.mapper.load_state_dict(mapper_dict, strict=False)
         self.local_actor_critic.load_state_dict(local_dict)
 
         # Set models to evaluation
@@ -381,9 +429,19 @@ class OccAntNavTrainer(BaseRLTrainer):
             self.prev_actions = torch.zeros(self.envs.num_envs, 1, device=self.device)
             self.prev_batch = None
             self.ep_time = torch.zeros(self.envs.num_envs, 1, device=self.device)
+
             # =========================== Episode loop ================================
             ep_start_time = time.time()
             current_episodes = self.envs.current_episodes()
+
+            # =========================== Setup episode logs ================================
+            model_name = self.config.RL.ANS.OCCUPANCY_ANTICIPATOR.type
+            scene_name = os.path.splitext(os.path.basename(current_episodes[0].scene_id))[0]
+            log_dir = f'/scratch/shantanu/nav_eval_logs/{model_name}/{scene_name}/{ep}'
+            for dirname in ['rgb', 'depth', 'bev', 'pose', 'global_map']:
+                os.makedirs(os.path.join(log_dir, dirname))
+
+
             for ep_step in range(self.config.T_MAX):
                 step_start_time = time.time()
                 # ============================ Action step ============================
@@ -407,6 +465,9 @@ class OccAntNavTrainer(BaseRLTrainer):
                         self.not_done_masks,
                         deterministic=ans_cfg.LOCAL_POLICY.deterministic_flag,
                     )
+                    
+                    self.write_frame_to_log(log_dir, ep_step, batch, mapper_outputs)
+
                     actions = local_policy_outputs["actions"]
                     # Make masks not done till reset (end of episode)
                     self.not_done_masks = torch.ones(
@@ -465,6 +526,22 @@ class OccAntNavTrainer(BaseRLTrainer):
                         logger.info(f"Time per episode: {mins_per_episode:.3f} mins")
                         logger.info(f"Time per step: {secs_per_step:.3f} secs")
                         logger.info(f"ETA: {eta_completion:.3f} mins")
+                        logger.info(f"=====> Overall metrics")
+                        for k, v in navigation_metrics.items():
+                            logger.info(f"{k}: {v.get_metric():.3f}")
+
+                        logger.info(f"<==================================>")
+
+                        # Log metrics to file:
+                        curr_metrics['difficulty'] = episode_difficulty
+                        curr_metrics['episode time'] = times_per_episode[-1]
+                        curr_metrics['avg step time'] = np.mean(list(times_per_step)[-ep_step:])
+                        curr_metrics['start_position'] = current_episodes[i].start_position
+                        curr_metrics['start_rotation'] = current_episodes[i].start_rotation
+                        curr_metrics['goal_position'] = current_episodes[i].goals[0].position
+
+                        with open(f'{log_dir}/metrics.pkl', 'wb') as f:
+                            pickle.dump(curr_metrics, f)
 
                     # For navigation, terminate episode loop when dones is called
                     break
@@ -472,7 +549,7 @@ class OccAntNavTrainer(BaseRLTrainer):
 
         if checkpoint_index == 0:
             try:
-                checkpoint_index = self.config.EVAL_CKPT_PATH_DIR.split("/")[-1].split(
+                eval_ckpt_idx = self.config.EVAL_CKPT_PATH_DIR.split("/")[-1].split(
                     "."
                 )[1]
                 logger.add_filehandler(
@@ -503,6 +580,14 @@ class OccAntNavTrainer(BaseRLTrainer):
                 writer.add_scalar(
                     f"{diff}_navigation/{k}", v.get_metric(), checkpoint_index
                 )
+
+        with open(f'/scratch/shantanu/nav_eval_logs/{model_name}/nav_metrics.pkl', 'wb') as f:
+            overall_metrics = {}
+            overall_metrics['navigation_metrics'] = dict([(k, v.get_metric()) for k, v in navigation_metrics.items()])
+            overall_metrics['per_difficulty_navigation_metrics'] = {}
+            for diff, diff_metrics in per_difficulty_navigation_metrics.items():
+                overall_metrics['per_difficulty_navigation_metrics'][diff] = dict([(k, v.get_metric()) for k, v in diff_metrics.items()])
+            pickle.dump(overall_metrics, f)
 
         total_eval_time = (time.time() - eval_start_time) / 60.0
         logger.info(f"Total evaluation time: {total_eval_time:.3f} mins")

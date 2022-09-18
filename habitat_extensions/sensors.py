@@ -20,6 +20,7 @@ from habitat.core.simulator import (
     SensorTypes,
     Simulator,
 )
+from habitat.sims.habitat_simulator.habitat_simulator import HabitatSimRGBSensor
 from habitat.core.utils import try_cv2_import
 from habitat.tasks.utils import cartesian_to_polar
 from habitat_extensions.geometry_utils import (
@@ -1160,3 +1161,12 @@ class NoisyIntegratedPointGoalGPSAndCompassSensor(PointGoalSensor):
         return self._compute_pointgoal(
             agent_position, rotation_world_agent, goal_position
         )
+
+
+@registry.register_sensor(name="RGBLargeSensor")
+class RGBLargeSensor(HabitatSimRGBSensor):
+    def __init__(self, config):
+        super().__init__(config=config)
+
+    def _get_uuid(self, *args: Any, **kwargs: Any):
+        return "rgb_large"

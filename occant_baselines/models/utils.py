@@ -10,6 +10,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torchvision.models as tmodels
+from torchvision import transforms
 
 from einops import rearrange, reduce, repeat, asnumpy
 
@@ -58,3 +59,11 @@ def crop_map(h, x, crop_size, mode="bilinear"):
     h_cropped = F.grid_sample(h, crop_grid, mode=mode)
 
     return h_cropped
+
+
+def invnormalize_imagenet(x):
+    inv_normalize = transforms.Normalize(
+            mean=[-0.485/0.229, -0.456/0.224, -0.406/0.255],
+            std=[1/0.229, 1/0.224, 1/0.255]
+        )
+    return inv_normalize(x)

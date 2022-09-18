@@ -7,8 +7,8 @@ TORCH_GPU_ID: 0
 TENSORBOARD_DIR: "trained_models/occant_rgb/run_00/navigation_eval_noise_free_tb"
 TEST_EPISODE_COUNT: 994
 EVAL_CKPT_PATH_DIR: "trained_models/occant_rgb/run_00/checkpoints/ckpt.8.pth"
-OA_CKPT_PATH_DIR: "trained_models/occant_rgb/run_00/checkpoints/weights_95.pth"
-CROSSVIEW_CKPT_PATH_DIR: None
+OA_CKPT_PATH_DIR: None
+CROSSVIEW_CKPT_PATH_DIR: "/scratch/shantanu/indolayout_logs/boundaryloss_w_discr/weights_50/pipeline.pth"
 NUM_PROCESSES: 1
 SENSORS: ["RGB_SENSOR", "DEPTH_SENSOR", "RGB_LARGE_SENSOR"]
 CHECKPOINT_FOLDER: "trained_models/occant_rgb/run_00/checkpoints"
@@ -33,12 +33,12 @@ RL:
       use_data_parallel: False
       gpu_ids: [0]
     OCCUPANCY_ANTICIPATOR:
-      type: 'occant_rgb_large'
-      GP_ANTICIPATION:
-        resnet_type: 'resnet18'
-        unet_nsf: 16
-        OUTPUT_NORMALIZATION:
-          channel_0: 'identity'
-          channel_1: 'identity'
+      type: 'cross-view'
+      CROSSVIEW:
+        type: 'P_BasicTransformer'
+        height: 512
+        width: 512
+        num_class: 3
+        occ_map_size: 128
     LOCAL_POLICY:
-      use_heuristic_policy: False
+      use_heuristic_policy: True

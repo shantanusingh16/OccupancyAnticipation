@@ -7,3 +7,7 @@
 [submodule "environments/habitat/habitat-sim"]
 	path = environments/habitat/habitat-sim
 	url = git@github.com:facebookresearch/habitat-sim.git
+[submodule "cross-view"]
+	path = cross-view
+	url = https://github.com/shantanusingh16/cross-view.git
+	branch = gibson

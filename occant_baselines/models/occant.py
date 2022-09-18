@@ -4,10 +4,17 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
+from tkinter import E
+import cv2
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torchvision.models as tmodels
+
+from .utils import invnormalize_imagenet
+
+from einops import rearrange
 
 from occant_baselines.models.unet import (
     UNetEncoder,
@@ -26,6 +33,10 @@ def softmax_2d(x):
     return x_out
 
 
+norm_layer = lambda x : nn.BatchNorm2d(x, affine=True, track_running_stats=False)
+
+
+
 # ================================ Anticipation base ==================================
 
 
@@ -37,12 +48,16 @@ class BaseModel(nn.Module):
         if cfg.GP_ANTICIPATION.OUTPUT_NORMALIZATION.channel_0 == "sigmoid":
             self.normalize_channel_0 = torch.sigmoid
         elif cfg.GP_ANTICIPATION.OUTPUT_NORMALIZATION.channel_0 == "softmax":
-            self.normalize_channel_0 = softmax_0d
+            self.normalize_channel_0 = softmax_2d
+        elif cfg.GP_ANTICIPATION.OUTPUT_NORMALIZATION.channel_0 == "identity":
+            self.normalize_channel_0 = torch.nn.Identity()
 
         if cfg.GP_ANTICIPATION.OUTPUT_NORMALIZATION.channel_1 == "sigmoid":
             self.normalize_channel_1 = torch.sigmoid
         elif cfg.GP_ANTICIPATION.OUTPUT_NORMALIZATION.channel_1 == "softmax":
             self.normalize_channel_1 = softmax_2d
+        elif cfg.GP_ANTICIPATION.OUTPUT_NORMALIZATION.channel_1 == "identity":
+            self.normalize_channel_0 = torch.nn.Identity()
 
         self._create_gp_models()
 
@@ -60,9 +75,10 @@ class BaseModel(nn.Module):
         raise NotImplementedError
 
     def _normalize_decoder_output(self, x_dec):
-        x_dec_c0 = self.normalize_channel_0(x_dec[:, 0])
-        x_dec_c1 = self.normalize_channel_1(x_dec[:, 1])
-        return torch.stack([x_dec_c0, x_dec_c1], dim=1)
+        out = []
+        for ch in range(x_dec.shape[1]):
+            out.append(self.normalize_channel_0(x_dec[:, ch, ...]))
+        return torch.stack(out, dim=1)
 
 
 # ============================= Anticipation models ===================================
@@ -87,32 +103,32 @@ class ANSRGB(BaseModel):
             resnet.layer4,  # (512, 4, 4)
             # FC layers equivalent
             nn.Conv2d(512, 512, 1),  # (512, 4, 4)
-            nn.BatchNorm2d(512),
+            norm_layer(512),
             nn.ReLU(),
             nn.Conv2d(512, 512, 1),  # (512, 4, 4)
-            nn.BatchNorm2d(512),
+            norm_layer(512),
             nn.ReLU(),
             # Upsampling
             nn.Conv2d(512, 256, 3, padding=1),  # (256, 4, 4)
-            nn.BatchNorm2d(256),
+            norm_layer(256),
             nn.ReLU(),
             nn.Upsample(
                 scale_factor=2, mode="bilinear", align_corners=True
             ),  # (256, 8, 8)
             nn.Conv2d(256, 128, 3, padding=1),  # (128, 8, 8)
-            nn.BatchNorm2d(128),
+            norm_layer(128),
             nn.ReLU(),
             nn.Upsample(
                 scale_factor=2, mode="bilinear", align_corners=True
             ),  # (128, 16, 16),
             nn.Conv2d(128, 64, 3, padding=1),  # (64, 16, 16)
-            nn.BatchNorm2d(64),
+            norm_layer(64),
             nn.ReLU(),
             nn.Upsample(
                 scale_factor=2, mode="bilinear", align_corners=True
             ),  # (64, 32, 32),
             nn.Conv2d(64, 32, 3, padding=1),  # (32, 32, 32)
-            nn.BatchNorm2d(32),
+            norm_layer(32),
             nn.ReLU(),
             nn.Upsample(
                 scale_factor=2, mode="bilinear", align_corners=True
@@ -122,9 +138,10 @@ class ANSRGB(BaseModel):
                 scale_factor=2, mode="bilinear", align_corners=True
             ),  # (2, 128, 128),
         )
+        self.rgb_key = self.config.get("rgb_key", "rgb")
 
     def _do_gp_anticipation(self, x):
-        x_dec = self.main(x["rgb"])
+        x_dec = self.main(x[self.rgb_key])
         x_dec = self._normalize_decoder_output(x_dec)
         outputs = {"occ_estimate": x_dec}
 
@@ -197,6 +214,8 @@ class OccAntRGB(BaseModel):
             for p in self.gp_depth_proj_estimator.parameters():
                 p.requires_grad = False
 
+        self.rgb_key = self.config.get("rgb_key", "rgb")
+
     def _do_gp_anticipation(self, x):
         """
         Inputs:
@@ -205,7 +224,7 @@ class OccAntRGB(BaseModel):
                 'depth' - (bs, 3, H, W) Depth input - channels are repeated
                 'ego_map_gt' - (bs, 2, H, W) probabilities
         """
-        x_rgb = self.gp_rgb_encoder(x["rgb"])  # (bs, 768, H/8, W/8)
+        x_rgb = self.gp_rgb_encoder(x[self.rgb_key])  # (bs, 768, H/8, W/8)
         x_gp = self.gp_rgb_projector(x_rgb)  # (bs, 768, H/4, W/4)
 
         x_rgb_enc = self.gp_rgb_unet(x_gp)  # {'x3p', 'x4p', 'x5p'}
@@ -375,6 +394,31 @@ class OccAntGroundTruth(BaseModel):
         return outputs
 
 
+# ================================ Cross-View Stub ==============================
+
+from crossView.pipelines import transformer
+
+imagenet_stats = {'mean': [0.485, 0.456, 0.406],
+                   'std': [0.229, 0.224, 0.225]}
+class crossViewStub(nn.Module):
+    def __init__(self, cfg):
+        super().__init__()
+        self.main = transformer.BasicTransformer_Old(None, cfg.CROSSVIEW)
+        # self.main = transformer.P_BasicTransformer(None, cfg.CROSSVIEW)
+        # self.main = transformer.MultiBlockTransformer(None, cfg.CROSSVIEW, nblocks=6)
+        
+    def forward(self, x):        
+        cr_pred = self.main(x["rgb_large"])
+        cr_pred = nn.Softmax2d()(cr_pred)
+        pred = torch.zeros((2, 2, 128, 128), device=x["rgb_large"].device)
+        pred[:, 0, ...] = cr_pred[:, 1, ...] > 0.5
+        pred[:, 1, ...] = cr_pred[:, 0, ...] < 0.5
+        out = {}
+        out['occ_estimate'] = pred
+        out['depth_proj_estimate'] = torch.zeros_like(pred, device=x["rgb_large"].device)
+        return out
+
+
 # ================================ Occupancy anticipator ==============================
 
 
@@ -384,6 +428,8 @@ class OccupancyAnticipator(nn.Module):
         self.config = cfg
         model_type = cfg.type
         self._model_type = model_type
+        self._model_apply_sigmoid = True
+        self._model_pred_refit = False
         cfg.defrost()
         if model_type == "ans_rgb":
             self.main = ANSRGB(cfg)
@@ -397,13 +443,53 @@ class OccupancyAnticipator(nn.Module):
             self.main = OccAntRGBD(cfg)
         elif model_type == "occant_ground_truth":
             self.main = OccAntGroundTruth(cfg)
+        elif model_type == "occant_rgb_large":
+            cfg.rgb_key = "rgb_large"
+            self.main = OccAntRGB(cfg)
+            self._model_pred_refit = True
+        elif model_type == "cross-view":
+            cfg.rgb_key = "rgb_large"
+            self.main = crossViewStub(cfg)
+            self._model_apply_sigmoid = False
+            self._model_pred_refit = True
         else:
             raise ValueError(f"Invalid model_type {model_type}")
+
+        self.bev_size = (128, 128)  # OccAnt Wrapper expects the output to be of this shape to cast it to 101x101 for downstream tasks.
+        self.bev_res = 0.05 # in m, pred size is 6.4m x 6.4m
 
         cfg.freeze()
 
     def forward(self, x):
-        return self.main(x)
+        out = self.main(x)
+
+        if self._model_apply_sigmoid is True:
+            for k in ["occ_estimate", "depth_proj_estimate"]:
+                if k not in out:
+                    continue
+                out[k] = F.interpolate(out[k], self.bev_size, mode='area')
+                out[k] = F.sigmoid(out[k])
+
+        # # Rescale 3.2x3.2 m pred to fit inside 6.4x6.4m pred
+        # if self._model_pred_refit is True:
+        #     for k in ["occ_estimate", "depth_proj_estimate"]:
+        #         if k not in out:
+        #             continue
+        #         map = torch.zeros((2, 2, *self.bev_size), requires_grad=True, device=out[k].device)
+        #         refit_map = F.interpolate(out[k], (self.bev_size[0]//2, self.bev_size[1]//2), mode='nearest')
+        #         map[..., 64:, 32:96] = refit_map
+        #         out[k] = map
+
+        # rgb = (invnormalize_imagenet(x['rgb_large'][1]).permute(1,2,0) * 255).detach().cpu().numpy().astype(np.uint8)
+        # cv2.imwrite('/scratch/shantanu/rgb.png', rgb)
+        
+        # occ = out["occ_estimate"][1].detach().cpu()
+        # vis_occ = np.zeros((128, 128), dtype=np.uint8)
+        # vis_occ[(occ[1] > 0.6) & (occ[0] < 0.6)] = 255
+        # vis_occ[(occ[1] > 0.6) & (occ[0] > 0.6)] = 127
+        # cv2.imwrite('/scratch/shantanu/occ.png', vis_occ)
+
+        return out
 
     @property
     def use_gp_anticipation(self):

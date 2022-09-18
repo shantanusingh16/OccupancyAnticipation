@@ -276,9 +276,11 @@ class Mapper(nn.Module):
     def predict_deltas(self, x, masks=None):
         # Transpose multichannel inputs
         st_1 = process_image(x["rgb_at_t_1"], self.img_mean_t, self.img_std_t)
+        st_large_1 = process_image(x["rgb_large_at_t_1"], self.img_mean_t, self.img_std_t)
         dt_1 = transpose_image(x["depth_at_t_1"])
         ego_map_gt_at_t_1 = transpose_image(x["ego_map_gt_at_t_1"])
         st = process_image(x["rgb_at_t"], self.img_mean_t, self.img_std_t)
+        st_large = process_image(x["rgb_large_at_t"], self.img_mean_t, self.img_std_t)
         dt = transpose_image(x["depth_at_t"])
         ego_map_gt_at_t = transpose_image(x["ego_map_gt_at_t"])
         # This happens only for a baseline
@@ -302,12 +304,14 @@ class Mapper(nn.Module):
             "depth": dt_1,
             "ego_map_gt": ego_map_gt_at_t_1,
             "ego_map_gt_anticipated": ego_map_gt_anticipated_at_t_1,
+            "rgb_large": st_large_1,
         }
         pu_inputs_t = {
             "rgb": st,
             "depth": dt,
             "ego_map_gt": ego_map_gt_at_t,
             "ego_map_gt_anticipated": ego_map_gt_anticipated_at_t,
+            "rgb_large": st_large,
         }
         pu_inputs = self._safe_cat(pu_inputs_t_1, pu_inputs_t)
         pu_outputs = self.projection_unit(pu_inputs)
