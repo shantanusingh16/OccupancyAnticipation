@@ -7,7 +7,7 @@ TORCH_GPU_ID: 0
 TENSORBOARD_DIR: "trained_models/occant_rgb/run_00/navigation_eval_noise_free_tb"
 TEST_EPISODE_COUNT: 994
 EVAL_CKPT_PATH_DIR: "trained_models/occant_rgb/run_00/checkpoints/ckpt.8.pth"
-OA_CKPT_PATH_DIR: "trained_models/occant_rgb/run_00/checkpoints/weights_95.pth"
+OA_CKPT_PATH_DIR: None
 CROSSVIEW_CKPT_PATH_DIR: None
 NUM_PROCESSES: 1
 SENSORS: ["RGB_SENSOR", "DEPTH_SENSOR", "RGB_LARGE_SENSOR"]
@@ -33,12 +33,12 @@ RL:
       use_data_parallel: False
       gpu_ids: [0]
     OCCUPANCY_ANTICIPATOR:
-      type: 'occant_rgb_large'
+      type: 'occant_rgb'
       GP_ANTICIPATION:
         resnet_type: 'resnet18'
         unet_nsf: 16
         OUTPUT_NORMALIZATION:
-          channel_0: 'identity'
-          channel_1: 'identity'
+          channel_0: 'sigmoid'
+          channel_1: 'sigmoid'
     LOCAL_POLICY:
       use_heuristic_policy: False

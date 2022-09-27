@@ -193,6 +193,8 @@ class ActiveNeuralSLAMExplorer:
         # Follow the plan with the local policy
         relative_goals = self._compute_relative_local_goals(pose_hat_at_t, M, s)
 
+        local_masks = 1 - torch.Tensor(SAMPLE_LOCAL_GOAL_FLAGS).to(device).unsqueeze(1)
+
         local_policy_inputs = {
             "rgb_at_t": rgb_at_t,
             "goal_at_t": relative_goals,
@@ -205,7 +207,7 @@ class ActiveNeuralSLAMExplorer:
             local_action_log_probs,
             recurrent_hidden_states,
         ) = self.local_policy.act(
-            local_policy_inputs, recurrent_hidden_states, None, masks
+            local_policy_inputs, recurrent_hidden_states, None, local_masks
         )
 
         state_estimates = {
@@ -218,6 +220,7 @@ class ActiveNeuralSLAMExplorer:
             "values": local_value,
             "actions": local_action,
             "action_log_probs": local_action_log_probs,
+            "local_masks": local_masks,
         }
         global_policy_outputs = {
             "values": global_value,
@@ -601,7 +604,8 @@ class ActiveNeuralSLAMNavigator:
 
         # Follow the plan with the local policy
         relative_goals = self._compute_relative_local_goals(pose_hat_at_t, M, s)
-
+        # Sample action with local policy
+        local_masks = 1 - torch.Tensor(SAMPLE_LOCAL_GOAL_FLAGS).to(device).unsqueeze(1)
         local_policy_inputs = {
             "rgb_at_t": rgb_at_t,
             "goal_at_t": relative_goals,
@@ -614,7 +618,7 @@ class ActiveNeuralSLAMNavigator:
             local_action_log_probs,
             recurrent_hidden_states,
         ) = self.local_policy.act(
-            local_policy_inputs, recurrent_hidden_states, None, masks
+            local_policy_inputs, recurrent_hidden_states, None, local_masks
         )
 
         # Rotate in place for 10 time-steps to allow better map initialization for planner
@@ -639,6 +643,7 @@ class ActiveNeuralSLAMNavigator:
             "values": local_value,
             "actions": local_action,
             "action_log_probs": local_action_log_probs,
+            "local_masks": local_masks,
         }
 
         return (

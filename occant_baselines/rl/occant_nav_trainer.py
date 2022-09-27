@@ -264,6 +264,15 @@ class OccAntNavTrainer(BaseRLTrainer):
             & (global_map[1] > self.config.RL.ANS.thresh_explored)] = 255
         cv2.imwrite(f'{log_dir}/global_map/{ep_step}.png', gm_3cls)
 
+        if 'ego_map_gt_anticipated' in batch:
+            gt_bev = batch['ego_map_gt_anticipated'].detach().cpu().numpy().squeeze().transpose(2,0,1)
+            gtbev_3cls = np.zeros(gt_bev.shape[1:], dtype=np.uint8)
+            gtbev_3cls[(gt_bev[0] > self.config.RL.ANS.thresh_obstacle) \
+                & (bev[1] > self.config.RL.ANS.thresh_explored)] = 127
+            gtbev_3cls[(gt_bev[0] < self.config.RL.ANS.thresh_obstacle) \
+                & (gt_bev[1] > self.config.RL.ANS.thresh_explored)] = 255
+            cv2.imwrite(f'{log_dir}/gt_bev/{ep_step}.png', gtbev_3cls)
+
     def train(self) -> None:
         r"""Main method for training PPO.
 
@@ -438,7 +447,7 @@ class OccAntNavTrainer(BaseRLTrainer):
             model_name = self.config.RL.ANS.OCCUPANCY_ANTICIPATOR.type
             scene_name = os.path.splitext(os.path.basename(current_episodes[0].scene_id))[0]
             log_dir = f'/scratch/shantanu/nav_eval_logs/{model_name}/{scene_name}/{ep}'
-            for dirname in ['rgb', 'depth', 'bev', 'pose', 'global_map']:
+            for dirname in ['rgb', 'depth', 'bev', 'pose', 'global_map', 'gt_bev']:
                 os.makedirs(os.path.join(log_dir, dirname))
 
 

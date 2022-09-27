@@ -94,6 +94,7 @@ _C.RL.ANS.thresh_explored = 0.6  # threshold to classify a cell as explored
 _C.RL.ANS.thresh_obstacle = 0.6  # threshold to classify a cell as an obstacle
 _C.RL.ANS.overall_map_size = 961  # world map size M
 _C.RL.ANS.reward_type = "area_seen"  # Can be area_seen / map_accuracy
+_C.RL.ANS.local_reward_type = "diff"
 _C.RL.ANS.local_slack_reward = -0.3
 _C.RL.ANS.local_collision_reward = -1.0
 _C.RL.ANS.stop_action_id = 3

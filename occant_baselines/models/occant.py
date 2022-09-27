@@ -33,31 +33,28 @@ def softmax_2d(x):
     return x_out
 
 
-norm_layer = lambda x : nn.BatchNorm2d(x, affine=True, track_running_stats=False)
-
-
-
 # ================================ Anticipation base ==================================
 
 
 class BaseModel(nn.Module):
+
     def __init__(self, cfg=None):
         super().__init__()
         self.config = cfg
 
         if cfg.GP_ANTICIPATION.OUTPUT_NORMALIZATION.channel_0 == "sigmoid":
-            self.normalize_channel_0 = torch.sigmoid
+            self.normalize_channel_0 = F.sigmoid
         elif cfg.GP_ANTICIPATION.OUTPUT_NORMALIZATION.channel_0 == "softmax":
             self.normalize_channel_0 = softmax_2d
         elif cfg.GP_ANTICIPATION.OUTPUT_NORMALIZATION.channel_0 == "identity":
             self.normalize_channel_0 = torch.nn.Identity()
 
         if cfg.GP_ANTICIPATION.OUTPUT_NORMALIZATION.channel_1 == "sigmoid":
-            self.normalize_channel_1 = torch.sigmoid
+            self.normalize_channel_1 = F.sigmoid
         elif cfg.GP_ANTICIPATION.OUTPUT_NORMALIZATION.channel_1 == "softmax":
             self.normalize_channel_1 = softmax_2d
         elif cfg.GP_ANTICIPATION.OUTPUT_NORMALIZATION.channel_1 == "identity":
-            self.normalize_channel_0 = torch.nn.Identity()
+            self.normalize_channel_1 = torch.nn.Identity()
 
         self._create_gp_models()
 
@@ -91,6 +88,7 @@ class ANSRGB(BaseModel):
 
     def _create_gp_models(self):
         resnet = tmodels.resnet18(pretrained=True)
+        norm_layer = lambda x : nn.BatchNorm2d(x, affine=True, track_running_stats=True)
         self.main = nn.Sequential(  # (3, 128, 128)
             # Feature extraction
             resnet.conv1,
@@ -403,16 +401,18 @@ imagenet_stats = {'mean': [0.485, 0.456, 0.406],
 class crossViewStub(nn.Module):
     def __init__(self, cfg):
         super().__init__()
-        self.main = transformer.BasicTransformer_Old(None, cfg.CROSSVIEW)
-        # self.main = transformer.P_BasicTransformer(None, cfg.CROSSVIEW)
+        # self.main = transformer.BasicTransformer_Old(None, cfg.CROSSVIEW)
+        self.main = transformer.P_BasicTransformer(None, cfg.CROSSVIEW)
         # self.main = transformer.MultiBlockTransformer(None, cfg.CROSSVIEW, nblocks=6)
         
     def forward(self, x):        
         cr_pred = self.main(x["rgb_large"])
         cr_pred = nn.Softmax2d()(cr_pred)
         pred = torch.zeros((2, 2, 128, 128), device=x["rgb_large"].device)
-        pred[:, 0, ...] = cr_pred[:, 1, ...] > 0.5
-        pred[:, 1, ...] = cr_pred[:, 0, ...] < 0.5
+        # pred[:, 0, ...] = cr_pred[:, 1, ...] > 0.5
+        # pred[:, 1, ...] = cr_pred[:, 0, ...] < 0.5
+        pred[:, 0] = cr_pred[:, 1]
+        pred[:, 1] = 1 - cr_pred[:, 0]
         out = {}
         out['occ_estimate'] = pred
         out['depth_proj_estimate'] = torch.zeros_like(pred, device=x["rgb_large"].device)
@@ -428,7 +428,7 @@ class OccupancyAnticipator(nn.Module):
         self.config = cfg
         model_type = cfg.type
         self._model_type = model_type
-        self._model_apply_sigmoid = True
+        self._model_apply_sigmoid = False
         self._model_pred_refit = False
         cfg.defrost()
         if model_type == "ans_rgb":
@@ -446,6 +446,7 @@ class OccupancyAnticipator(nn.Module):
         elif model_type == "occant_rgb_large":
             cfg.rgb_key = "rgb_large"
             self.main = OccAntRGB(cfg)
+            self._model_apply_sigmoid = True
             self._model_pred_refit = True
         elif model_type == "cross-view":
             cfg.rgb_key = "rgb_large"
@@ -470,15 +471,15 @@ class OccupancyAnticipator(nn.Module):
                 out[k] = F.interpolate(out[k], self.bev_size, mode='area')
                 out[k] = F.sigmoid(out[k])
 
-        # # Rescale 3.2x3.2 m pred to fit inside 6.4x6.4m pred
-        # if self._model_pred_refit is True:
-        #     for k in ["occ_estimate", "depth_proj_estimate"]:
-        #         if k not in out:
-        #             continue
-        #         map = torch.zeros((2, 2, *self.bev_size), requires_grad=True, device=out[k].device)
-        #         refit_map = F.interpolate(out[k], (self.bev_size[0]//2, self.bev_size[1]//2), mode='nearest')
-        #         map[..., 64:, 32:96] = refit_map
-        #         out[k] = map
+        # Rescale 3.2x3.2 m pred to fit inside 5.05x5.05m pred
+        if self._model_pred_refit is True:
+            for k in ["occ_estimate", "depth_proj_estimate"]:
+                if k not in out:
+                    continue
+                map = torch.zeros((2, 2, *self.bev_size), requires_grad=True, device=out[k].device)
+                refit_map = F.interpolate(out[k], (int(self.bev_size[0]*0.6336), int(self.bev_size[1]*0.6336)), mode='nearest')
+                map[..., 47:, 24:105] = refit_map
+                out[k] = map
 
         # rgb = (invnormalize_imagenet(x['rgb_large'][1]).permute(1,2,0) * 255).detach().cpu().numpy().astype(np.uint8)
         # cv2.imwrite('/scratch/shantanu/rgb.png', rgb)

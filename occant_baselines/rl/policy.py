@@ -507,7 +507,10 @@ class Mapper(nn.Module):
                 ego_map_t_1, dx, invert=True
             )
             inputs["ego_map_t_1"] = ego_map_t_1_trans
-        occ_cfg = self.projection_unit.main.config
+        if isinstance(self.projection_unit, torch.nn.DataParallel):
+            occ_cfg = self.projection_unit.module.main.config
+        else:
+            occ_cfg = self.projection_unit.main.config
         # ========================= Transform rgb and depth ===========================
         if "depth_t_1" in inputs:
             device = inputs["depth_t_1"].device

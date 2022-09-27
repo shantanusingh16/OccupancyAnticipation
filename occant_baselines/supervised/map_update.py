@@ -170,6 +170,8 @@ def map_update_fn(ps_args):
         pt_gt = rearrange(pt_gt, "b h w c -> b c h w")  # (bs, 2, V, V)
 
         # Forward pass
+        # print([v.device for k,v in observations.items()])
+        # print(mapper.device)
         mapper_inputs = observations
         mapper_outputs = mapper(mapper_inputs, method_name="predict_deltas")
         pt_hat = mapper_outputs["pt"]
@@ -323,7 +325,8 @@ class MapUpdate(MapUpdateBase):
         self.mapper_copy = MapperDataParallelWrapper(
             mapper_cfg, copy.deepcopy(self.mapper.projection_unit),
         )
-        self.mapper_copy.load_state_dict(self.mapper.state_dict())
+        remapped_state_dict = dict([(k.replace('module.main', 'module.module.main'), v) for k,v in self.mapper.state_dict().items()])
+        self.mapper_copy.load_state_dict(remapped_state_dict)
         if mapper_cfg.use_data_parallel and len(mapper_cfg.gpu_ids) > 0:
             self.mapper_copy.to(self.mapper.config.gpu_ids[0])
             self.mapper_copy = nn.DataParallel(
@@ -380,9 +383,13 @@ class MapUpdate(MapUpdateBase):
             losses = {}
         # Copy the state dict from mapper_copy to mapper
         if self.mapper.config.use_data_parallel:
-            self.mapper.load_state_dict(self.mapper_copy.module.state_dict())
+            remapped_state_dict = dict([(k.replace('module.module.main', 'module.main'), v) \
+                for k,v in self.mapper_copy.module.state_dict().items()])
+            self.mapper.load_state_dict(remapped_state_dict)
         else:
-            self.mapper.load_state_dict(self.mapper_copy.state_dict())
+            remapped_state_dict = dict([(k.replace('module.module.main', 'module.main'), v) \
+                for k,v in self.mapper_copy.state_dict().items()])
+            self.mapper.load_state_dict(remapped_state_dict)
         # Start the next update
         self.update_worker_dict["remote"].send(("update", None))
         self._first_update_sent = True

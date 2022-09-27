@@ -768,6 +768,9 @@ class OccAntExpTrainer(BaseRLTrainer):
             "rgb_at_t_1": spaces.Box(
                 low=0.0, high=255.0, shape=(imH, imW, 3), dtype=np.float32
             ),
+            "rgb_large_at_t_1": spaces.Box(
+                low=0.0, high=255.0, shape=(512, 512, 3), dtype=np.float32
+            ),
             "depth_at_t_1": spaces.Box(
                 low=0.0, high=255.0, shape=(imH, imW, 1), dtype=np.float32
             ),
@@ -785,6 +788,9 @@ class OccAntExpTrainer(BaseRLTrainer):
             ),
             "rgb_at_t": spaces.Box(
                 low=0.0, high=255.0, shape=(imH, imW, 3), dtype=np.float32
+            ),
+            "rgb_large_at_t": spaces.Box(
+                low=0.0, high=255.0, shape=(512, 512, 3), dtype=np.float32
             ),
             "depth_at_t": spaces.Box(
                 low=0.0, high=255.0, shape=(imH, imW, 1), dtype=np.float32
@@ -1057,7 +1063,7 @@ class OccAntExpTrainer(BaseRLTrainer):
             ground_truth_states["environment_layout"] = torch.zeros(
                 self.envs.num_envs, 2, M, M
             ).to(self.device)
-        masks = torch.zeros(self.envs.num_envs, 1)
+        masks = torch.zeros(self.envs.num_envs, 1, device=self.device)
         episode_step_count = torch.zeros(self.envs.num_envs, 1, device=self.device)
 
         # ==================== Reset the environments =================
